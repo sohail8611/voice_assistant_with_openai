@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- ... [rest of the head content] ... -->
+</head>
+<style>
+  body {
+    margin: 0;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: rgb(242, 240, 240);
+    font-family: Arial, sans-serif;
+  }
+
+  #assistant-container {
+    text-align: center;
+  }
+  #assistant_heading{
+    font-size: 50px;;
+  }
+  #microphone-button {
+    background-color: orange;
+    border: 1px solid green;
+    border-radius: 50%;
+    width: 20vh;
+    height: 20vh;
+    cursor: pointer;
+    outline: none;
+  }
+
+  /* Animation classes */
+  .listening {
+    animation: pulse-animation 2s infinite;
+  }
+
+  @keyframes pulse-animation {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+  }
+</style>
+<body>
+<div id="assistant-container">
+  <button id="microphone-button"></button>
+  <p id="assistant_heading">Nova - A Voice Assistant</p>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const microphoneButton = document.getElementById('microphone-button');
+  let recognition;
+  let isListening = false;
+  let silenceTimer;
+  let mediaRecorder;
+  let audioChunks = [];
+
+  if ('webkitSpeechRecognition' in window && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    const SpeechRecognition = window.webkitSpeechRecognition;
+    recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+
+    navigator.mediaDevices.getUserMedia({ audio: true })
+      .then(stream => {
+        mediaRecorder = new MediaRecorder(stream);
+        mediaRecorder.ondataavailable = event => {
+          audioChunks.push(event.data);
+        };
+      });
+
+    recognition.onstart = function() {
+      isListening = true;
+      microphoneButton.classList.add('listening');
+      microphoneButton.style.backgroundColor = 'orange';
+      audioChunks = [];
+      mediaRecorder.start();
+    };
+
+    recognition.onresult = function(event) {
+      clearTimeout(silenceTimer);
+      silenceTimer = setTimeout(() => {
+        recognition.stop();
+        mediaRecorder.stop();
+      }, 2000);
+    };
+
+    recognition.onend = function() {
+      isListening = false;
+      microphoneButton.classList.remove('listening');
+      microphoneButton.style.backgroundColor = 'green';
+      sendAudioToServer();
+    };
+
+    recognition.onerror = function(event) {
+      console.error('Speech recognition error', event.error);
+    };
+  } else {
+    alert('Your browser does not support the Web Speech API or MediaRecorder API');
+  }
+  function onAudioEnd() {
+    recognition.start()
+    console.log("Audio has finished playing");
+    // Add more code here that you want to execute after the audio ends
+}
+  function sendAudioToServer() {
+    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+    const formData = new FormData();
+    formData.append('audioFile', audioBlob);
+
+    fetch('http://localhost:5001/getaudio', {
+      method: 'POST',
+      body: formData
+    })
+    .then(response => response.blob())
+    .then(data => {
+      const audioUrl = URL.createObjectURL(data);
+      const audio = new Audio(audioUrl);
+      audio.addEventListener('ended', onAudioEnd);
+      audio.play();
+      console.log("waiting....")
+      
+    })
+    .catch(error => {
+      console.error('Error sending audio:', error);
+    });
+  }
+
+  microphoneButton.addEventListener('click', () => {
+    if (isListening) {
+      recognition.stop();
+      mediaRecorder.stop();
+      clearTimeout(silenceTimer);
+    } else {
+      recognition.start();
+    }
+  });
+});
+</script>
+</body>
+</html>
